@@ -3,7 +3,7 @@ header("Cache-Control: max-age=84000, public");
 header('Content-Type: audio/x-mpegurl');
 header('Content-Disposition: attachment; filename="playlist.m3u"');
 function getAllChannelInfo(): array {
-    $json = @file_get_contents('https://raw.githubusercontent.com/ttoor5/tataplay_urls/main/origin.json');
+    $json = @file_get_contents('https://playflix007.github.io/Api-TataPlay-widewine/tataplay.json');
     if ($json === false) {
         header("HTTP/1.1 500 Internal Server Error");
         exit;
