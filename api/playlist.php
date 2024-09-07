@@ -33,18 +33,4 @@ foreach ($channels as $channel) {
         continue;
     }
 
-    $extension = pathinfo(parse_url($dashUrl, PHP_URL_PATH), PATHINFO_EXTENSION);
-    $playlistUrl = "https://$serverAddress/{$id}.$extension|X-Forwarded-For=59.178.72.184";
-    
-    // License key URL generation
-    $licenseKeyUrl = "https://license-keys-api.vercel.app/?id={$id}";
-
-    $m3u8PlaylistFile .= "#EXTINF:-1 tvg-id=\"{$id}\" tvg-logo=\"https://mediaready.videoready.tv/tatasky-epg/image/fetch/f_auto,fl_lossy,q_auto,h_250,w_250/{$channel['channel_logo']}\" group-title=\"{$channel['channel_genre'][0]}\",{$channel['channel_name']}\n";
-    $m3u8PlaylistFile .= "#KODIPROP:inputstream.adaptive.license_type=clearkey\n";
-    $m3u8PlaylistFile .= "#KODIPROP:inputstream.adaptive.license_key={$licenseKeyUrl}\n";
-    $m3u8PlaylistFile .= "#EXTVLCOPT:http-user-agent=third-party\n";
-    $m3u8PlaylistFile .= "$playlistUrl\n\n";
-}
-
-echo $m3u8PlaylistFile;
-?>
+    $extension = pathinfo(parse_url($
