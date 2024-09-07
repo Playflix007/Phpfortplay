@@ -2,9 +2,11 @@
 error_reporting(0);
 ini_set('display_errors', 0);
 header("Cache-Control: max-age=20, public");
+
 function fetchData(string $url): ?string {
     return ($data = @file_get_contents($url)) !== false ? trim($data) : null;
 }
+
 function fetchMPDManifest(string $url): ?string {
     $curl = curl_init($url);
     curl_setopt_array($curl, [
@@ -14,9 +16,14 @@ function fetchMPDManifest(string $url): ?string {
         ],
     ]);
     $content = curl_exec($curl);
+    if ($content === false) {
+        header("HTTP/1.1 500 Internal Server Error");
+        exit;
+    }
     curl_close($curl);
-    return $content !== false ? $content : null;
+    return $content;
 }
+
 function extractPsshFromManifest(string $content, string $baseUrl): ?array {
     if (($xml = @simplexml_load_string($content)) === false) return null;
     foreach ($xml->Period->AdaptationSet as $set) {
@@ -48,25 +55,29 @@ function extractPsshFromManifest(string $content, string $baseUrl): ?array {
     }
     return null;
 }
+
 function getChannelInfo(string $id): array {
     $json = @file_get_contents('https://raw.githubusercontent.com/ttoor5/tataplay_urls/main/origin.json');
     $channels = $json !== false ? json_decode($json, true) : null;
     if ($channels === null) {
+        header("HTTP/1.1 500 Internal Server Error");
         exit;
     }
     foreach ($channels as $channel) {
         if ($channel['id'] == $id) return $channel;
     }
+    header("HTTP/1.1 404 Not Found");
     exit;
 }
-$id = $_GET['id'] ?? exit;
+
+$id = $_GET['id'] ?? header("HTTP/1.1 400 Bad Request") && exit;
 $channelInfo = getChannelInfo($id);
-$dashUrl = $channelInfo['streamData']['MPD='] ?? exit;
+$dashUrl = $channelInfo['streamData']['MPD='] ?? header("HTTP/1.1 404 Not Found") && exit;
 if (strpos($dashUrl, 'https://bpprod') !== 0) {
     header("Location: $dashUrl");
     exit;
 }
-$manifestContent = fetchMPDManifest($dashUrl) ?? exit;
+$manifestContent = fetchMPDManifest($dashUrl) ?? header("HTTP/1.1 500 Internal Server Error") && exit;
 $baseUrl = dirname($dashUrl);
 $widevinePssh = extractPsshFromManifest($manifestContent, $baseUrl);
 $processedManifest = str_replace('dash/', "$baseUrl/dash/", $manifestContent);
