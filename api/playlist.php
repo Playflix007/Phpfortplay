@@ -37,6 +37,7 @@ foreach ($channels as $channel) {
     
     // License key URL generation
     $licenseKeyUrl = "https://license-keys-api.vercel.app/?id={$id}";
+    error_log("Generated License Key URL: $licenseKeyUrl"); // Debugging line
 
     $m3u8PlaylistFile .= "#EXTINF:-1 tvg-id=\"{$id}\" tvg-logo=\"https://mediaready.videoready.tv/tatasky-epg/image/fetch/f_auto,fl_lossy,q_auto,h_250,w_250/{$channel['channel_logo']}\" group-title=\"{$channel['channel_genre'][0]}\",{$channel['channel_name']}\n";
     $m3u8PlaylistFile .= "#KODIPROP:inputstream.adaptive.license_type=clearkey\n";
