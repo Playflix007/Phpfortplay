@@ -1,8 +1,14 @@
 <?php
 error_reporting(0);
 ini_set('display_errors', 0);
-$id = $_GET['id'] ?? exit;
 header("Cache-Control: max-age=20, public");
+
+// Fetch and validate the 'id' parameter from the query string
+$id = $_GET['id'] ?? exit;
+$channelInfo = getChannelInfo($id);
+$dashUrl = $channelInfo['streamData']['MPD='] ?? exit;
+$baseUrl = dirname($dashUrl);
+
 function fetchData(string $url): ?string {
     return ($data = @file_get_contents($url)) !== false ? trim($data) : null;
 }
@@ -60,15 +66,8 @@ function getChannelInfo(string $id): array {
     }
     exit;
 }
-$id = $_GET['id'] ?? exit;
-$channelInfo = getChannelInfo($id);
-$dashUrl = $channelInfo['streamData']['MPD='] ?? exit;
-if (strpos($dashUrl, 'https://bpprod') !== 0) {
-    header("Location: $dashUrl");
-    exit;
-}
+
 $manifestContent = fetchMPDManifest($dashUrl) ?? exit;
-$baseUrl = dirname($dashUrl);
 $widevinePssh = extractPsshFromManifest($manifestContent, $baseUrl);
 $processedManifest = str_replace('dash/', "$baseUrl/dash/", $manifestContent);
 if ($widevinePssh) {
