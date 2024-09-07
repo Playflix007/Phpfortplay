@@ -2,9 +2,7 @@
 error_reporting(0);
 ini_set('display_errors', 0);
 header("Cache-Control: max-age=20, public");
-function fetchData(string $url): ?string {
-    return ($data = @file_get_contents($url)) !== false ? trim($data) : null;
-}
+
 function fetchMPDManifest(string $url): ?string {
     $curl = curl_init($url);
     curl_setopt_array($curl, [
@@ -17,6 +15,7 @@ function fetchMPDManifest(string $url): ?string {
     curl_close($curl);
     return $content !== false ? $content : null;
 }
+
 function extractPsshFromManifest(string $content, string $baseUrl): ?array {
     if (($xml = @simplexml_load_string($content)) === false) return null;
     foreach ($xml->Period->AdaptationSet as $set) {
@@ -48,6 +47,35 @@ function extractPsshFromManifest(string $content, string $baseUrl): ?array {
     }
     return null;
 }
+
+function fetchWidevineLicense(string $pssh): ?string {
+    $licenseServerUrl = 'https://your-license-server-url';  // Replace with your Widevine license server URL
+    $curl = curl_init($licenseServerUrl);
+    
+    // Prepare the POST request to the license server
+    curl_setopt_array($curl, [
+        CURLOPT_POST => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => [
+            'Content-Type: application/octet-stream',  // Widevine license server expects this
+            'Authorization: Bearer your_auth_token'    // Include any authorization if required
+        ],
+        CURLOPT_POSTFIELDS => base64_decode($pssh)  // Sending PSSH as binary in the POST request
+    ]);
+    
+    // Execute the request and get the response
+    $response = curl_exec($curl);
+    $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+    curl_close($curl);
+
+    // Check if the response is valid
+    if ($response !== false && $httpCode === 200) {
+        return $response;  // This is the license key response
+    }
+    
+    return null;
+}
+
 function getChannelInfo(string $id): array {
     $json = @file_get_contents('https://playflix007.github.io/Api-TataPlay-widewine/tataplay.json');
     $channels = $json !== false ? json_decode($json, true) : null;
@@ -59,6 +87,7 @@ function getChannelInfo(string $id): array {
     }
     exit;
 }
+
 $id = $_GET['id'] ?? exit;
 $channelInfo = getChannelInfo($id);
 $dashUrl = $channelInfo['streamData']['MPD='] ?? exit;
@@ -66,40 +95,28 @@ if (strpos($dashUrl, 'https://bpprod') !== 0) {
     header("Location: $dashUrl");
     exit;
 }
+
 $manifestContent = fetchMPDManifest($dashUrl) ?? exit;
 $baseUrl = dirname($dashUrl);
 $widevinePssh = extractPsshFromManifest($manifestContent, $baseUrl);
-$processedManifest = str_replace('dash/', "$baseUrl/dash/", $manifestContent);
+
 if ($widevinePssh) {
-    $processedManifest = str_replace(
-      '<ContentProtection value="cenc" schemeIdUri="urn:mpeg:dash:mp4protection:2011"/>',
-      '<!-- Common Encryption -->
-      <ContentProtection schemeIdUri="urn:mpeg:dash:mp4protection:2011" value="cenc" cenc:default_KID="' . $widevinePssh['kid'] . '">
-      </ContentProtection>',
-      $processedManifest
-    );
-    $processedManifest = str_replace(
-      '<ContentProtection schemeIdUri="urn:uuid:9a04f079-9840-4286-ab92-e65be0885f95" value="PlayReady"/>
-      <ContentProtection schemeIdUri="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed" value="Widevine"/>',
-      '<!-- Widevine -->
-      <ContentProtection schemeIdUri="urn:uuid:EDEF8BA9-79D6-4ACE-A3C8-27DCD51D21ED">
-        <cenc:pssh>' . $widevinePssh['pssh'] . '</cenc:pssh>
-      </ContentProtection>',
-      $processedManifest
-    );
+    // Fetch the Widevine license key
+    $licenseKey = fetchWidevineLicense($widevinePssh['pssh']);
+    
+    if ($licenseKey) {
+        // Return the license key in the response
+        header("Content-Type: application/json");
+        echo json_encode([
+            'licenseKey' => base64_encode($licenseKey),  // Encode the key as base64 if needed
+            'kid' => $widevinePssh['kid']
+        ]);
+        exit;
+    } else {
+        // Failed to fetch the license key
+        exit('Failed to fetch Widevine license key.');
+    }
+} else {
+    exit('Failed to extract PSSH.');
 }
-if (in_array($id, ['244', '599', '484'])) {
-    $processedManifest = str_replace(
-        'minBandwidth="226400" maxBandwidth="3187600" maxWidth="1920" maxHeight="1080"',
-        'minBandwidth="226400" maxBandwidth="2452400" maxWidth="1280" maxHeight="720"',
-        $processedManifest
-    );
-    $processedManifest = preg_replace('/<Representation id="video=3187600" bandwidth="3187600".*?<\/Representation>/s', '', $processedManifest);
-}
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type, Authorization");
-header('Content-Type: application/dash+xml');
-header('Content-Disposition: attachment; filename="script_by_drmlive' . urlencode($id) . '.mpd"');
-echo $processedManifest;
 ?>
