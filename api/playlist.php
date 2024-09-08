@@ -26,11 +26,10 @@ function fetchMpdData(string $url): string {
 }
 
 function extractPssh(string $mpdData): ?string {
-    // MPD XML मध्ये <ContentProtection> टॅग अंतर्गत PSSH माहिती शोधली आहे
     $xml = simplexml_load_string($mpdData);
     $pssh = $xml->xpath("//ContentProtection");
     if (isset($pssh[0])) {
-        return (string)$pssh[0]['cenc:pssh']; // आवश्यकतेनुसार समायोजित करा
+        return (string)$pssh[0]['cenc:pssh']; // Adjust if needed
     }
     return null;
 }
@@ -51,14 +50,18 @@ foreach ($channels as $channel) {
     }
 
     $mpdData = fetchMpdData($dashUrl);
+    if (empty($mpdData)) {
+        error_log("Failed to fetch MPD data from: $dashUrl");
+        continue;
+    }
+
     $pssh = extractPssh($mpdData);
 
     $extension = pathinfo(parse_url($dashUrl, PHP_URL_PATH), PATHINFO_EXTENSION);
     $playlistUrl = "$serverBaseUrl/{$id}.$extension|X-Forwarded-For=59.178.72.184";
     
-    // लायसन्स की URL तयार करणे
     $licenseKeyUrl = "$serverBaseUrl/?id={$id}&pssh=" . urlencode($pssh);
-    error_log("Generated License Key URL: $licenseKeyUrl"); // डिबगिंग लाइन
+    error_log("Generated License Key URL: $licenseKeyUrl");
 
     $m3u8PlaylistFile .= "#EXTINF:-1 tvg-id=\"{$id}\" tvg-logo=\"https://mediaready.videoready.tv/tatasky-epg/image/fetch/f_auto,fl_lossy,q_auto,h_250,w_250/{$channel['channel_logo']}\" group-title=\"{$channel['channel_genre'][0]}\",{$channel['channel_name']}\n";
     $m3u8PlaylistFile .= "#KODIPROP:inputstream.adaptive.license_type=clearkey\n";
@@ -66,6 +69,8 @@ foreach ($channels as $channel) {
     $m3u8PlaylistFile .= "#EXTVLCOPT:http-user-agent=third-party\n";
     $m3u8PlaylistFile .= "$playlistUrl\n\n";
 }
+
+error_log("M3U Playlist Content: " . $m3u8PlaylistFile); // For debugging
 
 echo $m3u8PlaylistFile;
 ?>
