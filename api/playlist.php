@@ -17,6 +17,24 @@ function getAllChannelInfo(): array {
     return $channels;
 }
 
+function fetchMpdData(string $url): string {
+    $mpdData = @file_get_contents($url);
+    if ($mpdData === false) {
+        return '';
+    }
+    return $mpdData;
+}
+
+function extractPssh(string $mpdData): ?string {
+    // MPD XML मध्ये <ContentProtection> टॅग अंतर्गत PSSH माहिती शोधली आहे
+    $xml = simplexml_load_string($mpdData);
+    $pssh = $xml->xpath("//ContentProtection");
+    if (isset($pssh[0])) {
+        return (string)$pssh[0]['cenc:pssh']; // आवश्यकतेनुसार समायोजित करा
+    }
+    return null;
+}
+
 $channels = getAllChannelInfo();
 $serverAddress = $_SERVER['HTTP_HOST'] ?? 'default.server.address';
 $serverPort = $_SERVER['SERVER_PORT'] ?? '80';
@@ -32,12 +50,15 @@ foreach ($channels as $channel) {
         continue;
     }
 
+    $mpdData = fetchMpdData($dashUrl);
+    $pssh = extractPssh($mpdData);
+
     $extension = pathinfo(parse_url($dashUrl, PHP_URL_PATH), PATHINFO_EXTENSION);
     $playlistUrl = "$serverBaseUrl/{$id}.$extension|X-Forwarded-For=59.178.72.184";
     
-    // License key URL generation
-    $licenseKeyUrl = "$generateserverBaseUrl/?id={$id}";
-    error_log("Generated License Key URL: $licenseKeyUrl"); // Debugging line
+    // लायसन्स की URL तयार करणे
+    $licenseKeyUrl = "$serverBaseUrl/?id={$id}&pssh=" . urlencode($pssh);
+    error_log("Generated License Key URL: $licenseKeyUrl"); // डिबगिंग लाइन
 
     $m3u8PlaylistFile .= "#EXTINF:-1 tvg-id=\"{$id}\" tvg-logo=\"https://mediaready.videoready.tv/tatasky-epg/image/fetch/f_auto,fl_lossy,q_auto,h_250,w_250/{$channel['channel_logo']}\" group-title=\"{$channel['channel_genre'][0]}\",{$channel['channel_name']}\n";
     $m3u8PlaylistFile .= "#KODIPROP:inputstream.adaptive.license_type=clearkey\n";
